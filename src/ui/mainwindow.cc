@@ -718,7 +718,16 @@ MainWindow::MainWindow( Config::Class & cfg_ ):
            [ this ]( auto audioUrl ) {
              auto view = getCurrentArticleView();
              if ( ( cfg.preferences.pronounceOnLoadMain || cfg.preferences.pronounceOnLoadPopup ) && view != nullptr ) {
-               view->openLink( QUrl::fromEncoded( audioUrl.toUtf8() ), {} );
+               if ( cfg.preferences.pronounceOnLoadPopup ) {
+                 if ( !scanPopup || !scanPopup->isActiveWindow() )
+                   return;
+                 view->openLink( QUrl::fromEncoded( audioUrl.toUtf8() ), {} );
+               }
+               else if ( cfg.preferences.pronounceOnLoadMain ) {
+                 if ( scanPopup && scanPopup->isActiveWindow() )
+                   return;
+                 view->openLink( QUrl::fromEncoded( audioUrl.toUtf8() ), {} );
+               }
              }
            } );
   applyProxySettings();
@@ -1626,9 +1635,7 @@ void MainWindow::updateGroupList()
 
   updateDictionaryBar();
 
-#ifdef QT_DEBUG
   qDebug() << "Reloading all the tabs...";
-#endif
 
   for ( int i = 0; i < ui.tabWidget->count(); ++i ) {
     ArticleView & view = dynamic_cast< ArticleView & >( *( ui.tabWidget->widget( i ) ) );
@@ -1652,8 +1659,8 @@ void MainWindow::updateDictionaryBar()
     if ( currentId == Instances::Group::AllGroupId )
       dictionaryBar.setMutedDictionaries( &cfg.mutedDictionaries );
     else {
-      Config::Group * grp = cfg.getGroup( currentId );
-      dictionaryBar.setMutedDictionaries( grp ? &grp->mutedDictionaries : nullptr );
+      Config::Group * _grp = cfg.getGroup( currentId );
+      dictionaryBar.setMutedDictionaries( _grp ? &_grp->mutedDictionaries : nullptr );
     }
 
     dictionaryBar.setDictionaries( grp->dictionaries );
@@ -2263,7 +2270,7 @@ void MainWindow::editPreferences()
       ArticleView & view = dynamic_cast< ArticleView & >( *( ui.tabWidget->widget( x ) ) );
 
       view.setSelectionBySingleClick( p.selectWordBySingleClick );
-
+      view.syncBackgroundColorWithCfgDarkReader();
       if ( needReload ) {
         view.reload();
       }
@@ -2413,7 +2420,10 @@ void MainWindow::translateInputFinished( bool checkModifiers )
   respondToTranslationRequest( word, checkModifiers );
 }
 
-void MainWindow::respondToTranslationRequest( QString const & word, bool checkModifiers, QString const & scrollTo )
+void MainWindow::respondToTranslationRequest( QString const & word,
+                                              bool checkModifiers,
+                                              QString const & scrollTo,
+                                              bool focus )
 {
   if ( !word.isEmpty() ) {
     Qt::KeyboardModifiers mods = QApplication::keyboardModifiers();
@@ -2427,7 +2437,9 @@ void MainWindow::respondToTranslationRequest( QString const & word, bool checkMo
         activateWindow();
     }
 
-    focusArticleView();
+    if ( focus ) {
+      focusArticleView();
+    }
   }
 }
 
@@ -3609,7 +3621,7 @@ void MainWindow::headwordReceived( const QString & word, const QString & ID )
 {
   toggleMainWindow( true );
   setInputLineText( word, WildcardPolicy::EscapeWildcards, NoPopupChange );
-  respondToTranslationRequest( word, false, ArticleView::scrollToFromDictionaryId( ID ) );
+  respondToTranslationRequest( word, false, ArticleView::scrollToFromDictionaryId( ID ), false );
 }
 
 void MainWindow::updateFavoritesMenu()

@@ -1,4 +1,4 @@
-name: macos-homebrew
+name: macos-arm-homebrew
 concurrency: 
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -18,10 +18,10 @@ on:
 jobs:
   build:
     name: Build
-    runs-on: macos-13-xlarge
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-12,macos-13]
+        os: [flyci-macos-large-latest-m2]
         qt_ver: [ 6.6.2 ]
         qt_arch: [clang_64]
     env:
@@ -92,26 +92,24 @@ jobs:
           
       - name: compile
         run: |          
-          qmake CONFIG+=release CONFIG+=no_macos_universal CONFIG+=zim_support CONFIG+=chinese_conversion_support CONFIG+=use_xapian CONFIG+=no_ffmpeg_player CONFIG+=no_tts_support QMAKE_APPLE_DEVICE_ARCHS="x86_64 arm64"
+          qmake CONFIG+=release CONFIG+=no_macos_universal CONFIG+=zim_support CONFIG+=use_xapian CONFIG+=no_ffmpeg_player CONFIG+=no_tts_support
           make -j8
           
       - name: package
         run: |
           
-          install_name_tool -change "/usr/lib/libz.1.dylib" "$(brew --prefix zlib)/lib/libz.1.dylib" GoldenDict.app/Contents/MacOS/GoldenDict
-          install_name_tool -change /usr/lib/libiconv.2.dylib "$(brew --prefix libiconv)/lib/libiconv.2.dylib" GoldenDict.app/Contents/MacOS/GoldenDict  
-          macdeployqt GoldenDict.app -qmldir=/opt/homebrew -verbose=1
-	  cp $(brew --prefix webp)/lib/libsharpyuv.0.dylib GoldenDict.app/Contents/Frameworks
+          macdeployqt ${targetName}.app -qmldir=. -verbose=1
           otool -L GoldenDict.app/Contents/MacOS/GoldenDict
+          
+          find /opt -name "libicudata.73.dylib" -exec  cp {} GoldenDict.app/Contents/Frameworks/ \;
           ls -al GoldenDict.app/Contents/Frameworks
-          find $(brew --prefix) -name "libicudata.73.dylib" 2>/dev/null -exec  cp {} GoldenDict.app/Contents/Frameworks/ \;
           
           find GoldenDict.app/Contents/Frameworks/ -maxdepth 1 -name "libicu*" -exec  ls -al {} \;
           find GoldenDict.app/Contents/Frameworks/ -maxdepth 1 -type f -name "libicu*" -exec  ls -al {} \;
-          mkdir tmplib
-          find GoldenDict.app/Contents/Frameworks/ -maxdepth 1 -type f -name "libzim*" -exec  dylibbundler -of -b -x {} -d tmplib -p @executable_path/../Frameworks -s /usr/local/ -s /opt/  \;
-          find GoldenDict.app/Contents/Frameworks/ -maxdepth 1 -name "libicu*" -exec  dylibbundler -of -b -x {} -d tmplib -p @executable_path/../Frameworks -s /usr/local/ -s /opt/  \;
-          cp -rf tmplib/* GoldenDict.app/Contents/Frameworks
+          
+          find GoldenDict.app/Contents/Frameworks/ -maxdepth 1 -type f -name "libzim*" -exec  dylibbundler -of -b -x {} -d GoldenDict.app/Contents/Frameworks/ -p @executable_path/../Frameworks -s /usr/local/ -s /opt/  \;
+          find GoldenDict.app/Contents/Frameworks/ -maxdepth 1 -name "libicu*" -exec  dylibbundler -of -b -x {} -d GoldenDict.app/Contents/Frameworks/ -p @executable_path/../Frameworks -s /usr/local/ -s /opt/  \;
+          
           otool -L GoldenDict.app/Contents/Frameworks/libicu*
           otool -L GoldenDict.app/Contents/Frameworks/libzim*
 

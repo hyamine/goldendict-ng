@@ -155,6 +155,8 @@ ArticleView::ArticleView( QWidget * parent,
 
   webview->setUp( const_cast< Config::Class * >( &cfg ) );
 
+  syncBackgroundColorWithCfgDarkReader();
+
   goBackAction.setShortcut( QKeySequence( "Alt+Left" ) );
   webview->addAction( &goBackAction );
   connect( &goBackAction, &QAction::triggered, this, &ArticleView::back );
@@ -1125,6 +1127,7 @@ void ArticleView::openLink( QUrl const & url, QUrl const & ref, QString const & 
       sptr< Dictionary::DataRequest > req = articleNetMgr.getResource( url, contentType );
 
       if ( !req.get() ) {
+        qDebug() << "request failed: " << url;
         // Request failed, fail
       }
       else if ( req->isFinished() && req->dataSize() >= 0 ) {
@@ -1145,7 +1148,7 @@ void ArticleView::openLink( QUrl const & url, QUrl const & ref, QString const & 
 
     if ( resourceDownloadRequests.empty() ) // No requests were queued
     {
-      QMessageBox::critical( this, "GoldenDict", tr( "The referenced resource doesn't exist." ) );
+      qDebug() << tr( "The referenced resource doesn't exist." );
       return;
     }
     else
@@ -1358,6 +1361,20 @@ void ArticleView::setDelayedHighlightText( QString const & text )
 {
   delayedHighlightText = text;
 }
+
+void ArticleView::syncBackgroundColorWithCfgDarkReader() const
+{
+// Only works Qt6.6.3+ https://bugreports.qt.io/browse/QTBUG-112013
+#if QT_VERSION >= QT_VERSION_CHECK( 6, 6, 3 )
+  if ( cfg.preferences.darkReaderMode ) {
+    webview->page()->setBackgroundColor( Qt::black );
+  }
+  else {
+    webview->page()->setBackgroundColor( Qt::white );
+  }
+#endif
+}
+
 
 void ArticleView::back()
 {
@@ -1885,7 +1902,7 @@ void ArticleView::pasteTriggered()
 
   if ( !word.isEmpty() ) {
     unsigned groupId = getGroup( webview->url() );
-    if ( groupId == 0 ) {
+    if ( groupId == 0 || groupId == Instances::Group::HelpGroupId ) {
       // We couldn't figure out the group out of the URL,
       // so let's try the currently selected group.
       groupId = currentGroupId;
